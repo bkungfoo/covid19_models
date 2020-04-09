@@ -130,7 +130,6 @@ dmypy.json
 
 # Data directory
 data/
-images/
 
 # Emacs artifacts
 *~
