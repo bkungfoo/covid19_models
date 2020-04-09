@@ -12,7 +12,7 @@ pip install -r requirements.txt
 
 # Data collection and preprocessing
 
-Run the following inside your bash shell to download and format data for notebook use. Note that the first time running this command may take a few minutes, but successive commands do incremental updates on only the newest dates available.
+Run the following inside your bash shell to download and format data for notebook use. Note that the first time running this command may take a few minutes, but successive commands do incremental updates on only the newest dates available. In order to ensure you have up to date data, make sure to run this EVERY TIME before working with notebooks!
 
 ```
 sh update_data.sh
