@@ -10,3 +10,5 @@ fi
 
 mkdir -p data
 cp census/* data/
+
+python preprocess_data.py

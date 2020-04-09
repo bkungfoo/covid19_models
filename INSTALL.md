@@ -1,4 +1,4 @@
-# Installation and Data Preprocessing
+# Installation
 
 [Install python3](https://www.python.org/downloads/) on your computer.
 
@@ -10,13 +10,15 @@ Inside a bash shell in this project directory, run the following command to inst
 pip install -r requirements.txt
 ```
 
-Run the following inside your bash shell to download and format data for notebook use:
+# Data collection and preprocessing
+
+Run the following inside your bash shell to download and format data for notebook use. Note that the first time running this command may take a few minutes, but successive commands do incremental updates on only the newest dates available.
 
 ```
-sh fetch_data.sh
+sh update_data.sh
 ```
 
-Start a Jupyter notebook kernel:
+To start a Jupyter notebook kernel and start running notebooks, type:
 
 ```
 jupyter notebook
