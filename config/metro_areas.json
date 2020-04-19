@@ -1,0 +1,32 @@
+[
+  {
+    "Country": "US",
+    "Title": "NYC",
+    "StateFIPS": 36,
+    "CountyFIPS": [5, 47, 61, 81, 85]
+  },
+  {
+    "Country": "US",
+    "Title": "New Orleans",
+    "StateFIPS": 22,
+    "CountyFIPS": [51, 71, 75, 87, 89, 95, 103, 105]
+  },
+  {
+    "Country": "US",
+    "Title": "Detroit",
+    "StateFIPS": 26,
+    "CountyFIPS": [87, 93, 99, 125, 147, 163]
+  },
+  {
+    "Country": "US",
+    "Title": "Bay Area",
+    "StateFIPS": 6,
+    "CountyFIPS": [1, 13, 41, 55, 75, 81, 85, 95, 97]
+  },
+  {
+    "Country": "US",
+    "Title": "Los Angeles",
+    "StateFIPS": 6,
+    "CountyFIPS": [37, 59, 65, 71, 111]
+  }
+]
