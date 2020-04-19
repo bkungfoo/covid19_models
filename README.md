@@ -6,8 +6,9 @@ This repository contains code to generate models and Python Notebooks to do
 visualizations using publicly available data for the COVID-19 outbreak.
 
 * [Installation Instructions](./INSTALL.md)
+* [Downloading and Preprocessing Data](./PREPROCESSING.md)
 * [Fitting Models](./MODEL_FITTING.md)
-* [Visualization Notebook](./)
+* [Visualization Notebook](./sir_modeling.ipynb)
 
 ## SIR Model
 
