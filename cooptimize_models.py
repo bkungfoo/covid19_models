@@ -7,9 +7,9 @@ until they converge.
 """
 import json
 import os
-import pickle
 
 import numpy as np
+import pandas as pd
 from absl import app
 from absl import flags
 
@@ -18,7 +18,7 @@ from modeling import optimizer
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string('specfile', 'country_geos', 'JSON file of countries and regions to load.')
+flags.DEFINE_string('specfile', 'late_stage_areas', 'JSON file of countries and regions to load.')
 flags.DEFINE_string('metric', 'Deaths', 'Either \"Deaths\" or \"Cases\" (confirmed cases).')
 flags.DEFINE_boolean('smooth_data', True, 'Whether the smooth the data by limiting outlier fractional metric changes.')
 flags.DEFINE_string('start_date', '2019-01-01', 'First date from which to get data, specified in YYYY-MM-dd format.')
@@ -28,13 +28,14 @@ flags.DEFINE_multi_float('pop_frac_range', [0.00005, 0.01], 'Two floats specifyi
                          'in steady state.')
 flags.DEFINE_multi_float('infection_rate_range', [0.01, 1.0], 'Two floats specifying the min and max number of people '
                          'a single infected person infects daily (on average), i.e. the base of the exponential.')
-flags.DEFINE_multi_float('multiplier_range', [0.001, 1000.0],
+flags.DEFINE_multi_float('multiplier_range', [0.005, 200.0],
                          'Two floats specifying the min and max multiplier on the first day\'s recorded metric, '
                          'meaning that the \"true\" metric was actually ahead or behind the first recorded value. '
                          '(Allows us to slide the curve forward or backward in time.)')
-flags.DEFINE_multi_float('recovery_days_range', [10.0, 80.0],
+flags.DEFINE_multi_float('recovery_days_range', [12.0, 50.0],
                          'Two floats specifying the min and max number of days that an infected person remains '
                          'contagious.')
+flags.DEFINE_integer('processes', 4, 'Number of processes to spawn for parallel optimization.')
 
 
 def main(argv):
@@ -67,13 +68,26 @@ def main(argv):
         data = dataproc.convert_data_to_numpy(area_df, metric=FLAGS.metric)
         data_list.append(data)
         population_list.append(population)
-    best_param, best_result = optimizer.shared_minimize(
+    best_param, best_value = optimizer.shared_minimize(
         data_list, population_list, FLAGS.recovery_days_range,
-        FLAGS.pop_frac_range, FLAGS.infection_rate_range, FLAGS.multiplier_range
+        FLAGS.pop_frac_range, FLAGS.infection_rate_range, FLAGS.multiplier_range,
+        processes=FLAGS.processes
     )
     print('best param:', best_param)
-    print('best result:', best_result)
-    with open(os.path.join('data', FLAGS.specfile + '_best_params.pkl'), 'wb') as f:
-        pickle.dump(best_param, f)
+    print('best value:', best_value)
+
+    # Append result to CSV file
+    csv_file = os.path.join('data', FLAGS.specfile + '_best_params.csv')
+    if not os.path.isfile(csv_file):
+        column_names = ['Date',
+                        'Days To Recover',
+                        'MSE']
+        df = pd.DataFrame(columns=column_names)
+    else:
+        df = pd.read_csv(csv_file, index_col='Unnamed: 0', parse_dates=['Date'])
+    df.loc[len(df)] = [FLAGS.end_date, best_param[-1], best_value]
+    df = df.drop_duplicates('Date', keep='last').sort_values('Date').reset_index(drop=True)
+
+    df.to_csv(csv_file)
 if __name__ == "__main__":
     app.run(main)

@@ -12,14 +12,14 @@ individual to recover.
 
 Inside the [config](./config) folder are a number of sample json files, which specify
 the several different groups of locations on which to run model fitting. The suggested
-config file to use for co-optimization is country_geos as it contains countries in later stages
-of the curve. 
+config file to use for co-optimization is `late_stage_areas` as it contains countries and US locations
+in later stages of the curve. 
 
 ```
-python cooptimize_models.py --specfile country_geos 
+python cooptimize_models.py --specfile late_stage_areas --processes 4
 ```
 
-**TODO:** Because the code requires grid search followed by independent local optimization runs,
+Because the code requires grid search followed by independent local optimization runs,
 it is beneficial to utilize multiple processors/cores. Add option `--processors N`
 
 
@@ -32,10 +32,13 @@ in the [config](./config) directory, and place it in the config directory. Then 
 the [fit_model.py](./fit_models.py) script, e.g.:
 
 ```
-python fit_model.py --specfile metro_areas --recovery_days 20
+python fit_model.py --specfile metro_areas --recovery_days 20 --processes 4
 ```
 
 This should generate a csv in your `data` folder with the title corresponding to your
  `--specfile` parameter, e.g. `metro_areas.csv`.
  
 This file can then be used with any of the python notebooks (`.ipynb` extensions).
+
+Please see fit_model file for other options. For example, you can set batch_first_end_date
+and batch_last_end_date to do incremental writes to the csv by date.

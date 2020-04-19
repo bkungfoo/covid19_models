@@ -115,5 +115,4 @@ def create_shared_objective_fn(data_list, population_list, sampling_rate):
             sumse += np.sum(np.square(data - r[::sampling_rate]))
             count += data.shape[0]
         return sumse / count
-
     return _fn

@@ -14,5 +14,10 @@
   {
     "Country": "United Kingdom",
     "Title": "United Kingdom"
+  },
+  {
+    "Country": "US",
+    "Title": "New York",
+    "StateFIPS": 36
   }
 ]

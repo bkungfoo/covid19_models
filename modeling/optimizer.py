@@ -1,13 +1,12 @@
-from scipy import optimize
-
 from modeling import sir_model
-
+from multiprocessing import Pool
+from scipy import optimize
 import itertools
 import numpy as np
 
 
 def log_scale_grid_search(data, population, recovery_days,
-                          pop_frac_interval, infection_rate_interval, multiplier_interval,
+                          pop_frac_range, infection_rate_range, multiplier_range,
                           sampling_rate=10, pts_per_param=10, top_k=20):
     """Explore parameters using grid search in log scale over a range, and return the top k points and values.
 
@@ -31,13 +30,13 @@ def log_scale_grid_search(data, population, recovery_days,
 
     mse_metric = sir_model.create_objective_fn(data, population, sampling_rate)
 
-    min_bounds = np.array([np.log(pop_frac_interval[0]),
-                           np.log(infection_rate_interval[0]),
-                           np.log(multiplier_interval[0]),
+    min_bounds = np.array([np.log(pop_frac_range[0]),
+                           np.log(infection_rate_range[0]),
+                           np.log(multiplier_range[0]),
                            ])
-    max_bounds = np.array([np.log(pop_frac_interval[1]),
-                           np.log(infection_rate_interval[1]),
-                           np.log(multiplier_interval[1]),
+    max_bounds = np.array([np.log(pop_frac_range[1]),
+                           np.log(infection_rate_range[1]),
+                           np.log(multiplier_range[1]),
                            ])
 
     arrays = [np.linspace(min_bound, max_bound, num=pts_per_param) for min_bound, max_bound in
@@ -61,6 +60,7 @@ def minimize(data, population, recovery_days, pop_frac_range, infection_rate_ran
 
     best_param = None
     best_value = 1e12
+
     for param in top_k_params:
         result = optimize.minimize(mse_obj, param, bounds=(
             [tuple(pop_frac_range),
@@ -72,9 +72,30 @@ def minimize(data, population, recovery_days, pop_frac_range, infection_rate_ran
     return best_param, best_value
 
 
+
+def _grid_search_map_fn(data, population, recovery_days,
+                        pop_frac_range, infection_rate_range, multiplier_range,
+                        pts_per_param=10, top_k=20):
+    _, top_k_params, _ = log_scale_grid_search(
+        data, population, recovery_days,
+        pop_frac_range, infection_rate_range, multiplier_range,
+        sampling_rate=10,
+        pts_per_param=pts_per_param,
+        top_k=top_k)
+    return top_k_params
+
+
+def _shared_minimize_map_fn(data_list, population_list, sampling_rate, starting_param):
+    shared_obj_fn = sir_model.create_shared_objective_fn(data_list, population_list, sampling_rate)
+    result = optimize.minimize(shared_obj_fn, starting_param, options={'maxiter': 500})
+    print('Params:', result.x)
+    print('MSE:', result.fun)
+    return result.fun, result.x
+
+
 def shared_minimize(data_list, population_list, recovery_days_range,
                     pop_frac_range, infection_rate_range, multiplier_range,
-                    sampling_rate=10, pts_per_param=10, top_k=4):
+                    sampling_rate=10, pts_per_param=10, top_k=4, processes=4):
     """Minimize a global objective based on some shared parameters such as recovery time.
 
     Takes a list of data and population values, and returns a set of mse_metrics indexed by recovery_time.
@@ -92,39 +113,39 @@ def shared_minimize(data_list, population_list, recovery_days_range,
                                            np.log(recovery_days_range[1]),
                                            num=pts_per_param))
 
-
-    shared_obj_fn = sir_model.create_shared_objective_fn(data_list, population_list, sampling_rate)
-
     starting_params = []
+    p = Pool(processes=processes)
+
     for days in log_recovery_days:
-        params_list = []
-        for data, population in zip(data_list, population_list):
-            _, top_k_params, _ = log_scale_grid_search(
-                data, population, days,
-                pop_frac_range, infection_rate_range, multiplier_range,
-                sampling_rate=10,
-                pts_per_param=pts_per_param,
-                top_k=top_k)
-            params_list.append(top_k_params) # Dimension (pts_per_param, top_k, 3)
+
+        data_len = len(data_list)
+        params_list = p.starmap(_grid_search_map_fn,
+                            zip(data_list,
+                                population_list,
+                                [days] * data_len,
+                                [pop_frac_range] * data_len,
+                                [infection_rate_range] * data_len,
+                                [multiplier_range] * data_len,
+                                [pts_per_param] * data_len,
+                                [top_k] * data_len))
 
         # Reshape params_list into (top_k, 3 * pts_per_param)
         params = np.concatenate(params_list, axis=-1)
         # Append a column with the recovery time to params
         params = np.concatenate((params, days * np.ones((top_k, 1))), axis=-1)
         starting_params.append(params)
-
+        print('Done grid search on recovery_days =', days)
     starting_params = np.concatenate(starting_params, axis=0)
 
-    best_result = 1e12
-    best_param = None
     print('Number of starting parameters', starting_params.shape[0])
-    for i, param in enumerate(starting_params):
-        result = optimize.minimize(shared_obj_fn, param)
-        print('Iteration', i, 'of', starting_params.shape[0])
-        print('Params:', result.x)
-        print('MSE:', result.fun)
-        if result.fun < best_result:
-            best_result = result.fun
-            best_param = result.x
+
+    params_len = starting_params.shape[0]
+    results = p.starmap(_shared_minimize_map_fn,
+                        zip([data_list] * params_len,
+                        [population_list] * params_len,
+                        [sampling_rate] * params_len,
+                        starting_params))
+    print('all results', results)
+    best_result, best_param = min(results)
 
     return best_param, best_result
