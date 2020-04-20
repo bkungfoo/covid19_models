@@ -11,4 +11,9 @@ fi
 mkdir -p data
 cp census/* data/
 
-python preprocess_data.py
+if [ -z "$1" ]
+then
+  python preprocess_data.py
+else
+  python preprocess_data.py --start_date $1
+fi

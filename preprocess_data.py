@@ -7,7 +7,17 @@ import math
 import os
 import pickle
 
-START_DATE = datetime(2019, 1, 1)  # Set some long time in the past before infection.
+from absl import app
+from absl import flags
+
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string('start_date', '', 'Start date for importing data. Format is YYYY-MM-dd. If not specified, '
+                    'will default to creating the entire table if the table does not already exist, and doing '
+                    'incremental updates if the table already exists.')
+
+DEFAULT_START_DATE = datetime(2019, 1, 1)  # Set some long time in the past before infection.
 
 
 def is_date(string, fuzzy=False):
@@ -41,7 +51,7 @@ def get_county(string):
         return str_array[0]
 
 
-def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filename):
+def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filename, start_date=''):
     column_names = ['FIPS', 'County', 'Province_State', 'Country_Region', 'Date', 'Cases', 'Deaths', 'Population']
 
     if os.path.exists(filename):
@@ -50,10 +60,13 @@ def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filena
     else:
         us_combined_df = pd.DataFrame(columns=column_names)
 
-    if len(us_combined_df):
-        start_date = us_combined_df['Date'].max() + timedelta(0, 0, 1)
+    if not start_date:
+        if len(us_combined_df):
+            start_date = us_combined_df['Date'].max() + timedelta(0, 0, 1)
+        else:
+            start_date = DEFAULT_START_DATE
     else:
-        start_date = datetime(2019, 1, 1)
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
 
     # Use date conversions to extract correct dates from column names in COVID dataset
     date_cols = [x for x in list(us_confirmed_df) if is_date(x)]
@@ -94,7 +107,7 @@ def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filena
         pickle.dump(us_combined_df, f)
 
 
-def write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, filename):
+def write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, filename, start_date=''):
     column_names = ['Country_Region', 'Date', 'Cases', 'Deaths', 'Population']
 
     if os.path.exists(filename):
@@ -103,10 +116,13 @@ def write_world_country_data(world_confirmed_df, world_deaths_df, world_populati
     else:
         world_combined_df = pd.DataFrame(columns=column_names)
 
-    if len(world_combined_df):
-        start_date = world_combined_df['Date'].max() + timedelta(0, 0, 1)
+    if not start_date:
+        if len(world_combined_df):
+            start_date = world_combined_df['Date'].max() + timedelta(0, 0, 1)
+        else:
+            start_date = datetime(2019, 1, 1)
     else:
-        start_date = datetime(2019, 1, 1)
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
 
     # Use date conversions to extract correct dates from column names in COVID dataset
     date_cols = [x for x in list(world_confirmed_df) if is_date(x)]
@@ -150,7 +166,7 @@ def write_world_country_data(world_confirmed_df, world_deaths_df, world_populati
         pickle.dump(world_combined_df, f)
 
 
-def preprocess_data():
+def preprocess_data(argv):
     # Get covid confirmed cases and deaths for each US county and date.
     us_confirmed_df = pd.read_csv(
         '../COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv')
@@ -176,9 +192,11 @@ def preprocess_data():
     world_population_df['Population'] *= 1000
 
     # Write to disk
-    write_us_county_data(us_confirmed_df, us_deaths_df, us_county_census_df, './data/us_combined_df.pkl')
-    write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, './data/world_combined_df.pkl')
+    write_us_county_data(us_confirmed_df, us_deaths_df, us_county_census_df, './data/us_combined_df.pkl',
+                         FLAGS.start_date)
+    write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, './data/world_combined_df.pkl',
+                             FLAGS.start_date)
 
 
 if __name__ == "__main__":
-    preprocess_data()
+    app.run(preprocess_data)

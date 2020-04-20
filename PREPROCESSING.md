@@ -8,3 +8,10 @@ ensure you have up to date data, make sure to run this daily before doing additi
 ```
 sh update_data.sh
 ```
+
+If you would like to backfill starting from an earlier date, you can add the date in
+YYYY-MM-dd format as an argument, e.g.:
+
+```
+sh update_data.sh 2020-04-15
+```
