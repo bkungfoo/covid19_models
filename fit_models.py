@@ -1,3 +1,5 @@
+"""Runs parallel SIR model fitting across multiple regions and multiple end dates."""
+
 import datetime
 import json
 import os
@@ -71,33 +73,6 @@ def main(argv):
         last_end_date = datetime.datetime.strptime(FLAGS.batch_last_end_date, '%Y-%m-%d')
         last_end_date = min(last_end_date, datetime.datetime.now() + datetime.timedelta(1))
         print('num days', int((last_end_date - first_end_date).days))
-        # for n in range(int((last_end_date - first_end_date).days)):
-        #     curr_end_date = first_end_date + datetime.timedelta(n)
-        #     bounded_area_df = area_df[area_df['Date'] <= curr_end_date]
-        #     # Limit to only positive values
-        #     bounded_area_df = bounded_area_df[bounded_area_df[FLAGS.metric] > 0]
-        #     if len(bounded_area_df) < FLAGS.min_pos_value_days:
-        #         continue
-        #
-        #     max_date = bounded_area_df['Date'].max()
-        #     if max_date < curr_end_date:
-        #         continue
-        #
-        #     # Preprocess and optimize model
-        #     data = dataproc.convert_data_to_numpy(bounded_area_df, metric=FLAGS.metric)
-        #     best_param, best_value = optimizer.minimize(
-        #         data, population, FLAGS.recovery_days,
-        #         FLAGS.pop_frac_range, FLAGS.infection_rate_range, FLAGS.multiplier_range
-        #     )
-        #     print('Area:', area['Title'], 'Ending date:', curr_end_date)
-        #     print('Params:', best_param)
-        #     print('MSE:', best_value)
-        #     # Record data for writing to csv file
-        #     df.loc[len(df)] = [max_date, area['Title'],
-        #                        best_param[0], best_param[0] * population,
-        #                        best_param[1], FLAGS.recovery_days,
-        #                        best_param[2], best_value]
-        #     df = df.drop_duplicates(['Date', 'Area'], keep='last').reset_index(drop=True)
 
         # Multiprocessing
         num_days = int((last_end_date - first_end_date).days)

@@ -20,6 +20,8 @@ def compute_sir(sampling_rate, total_days, pop, infected, infection_rate, days_t
         Time indices, and associated susceptible, infected, and recovered populations
 
     """
+
+    # TODO: Use scipy.integrate.solve_ivp and 4th order Runge Kutta for improved accuracy.
     s = [1.0]
     i = [float(infected) / pop]
     r = [0.0]
