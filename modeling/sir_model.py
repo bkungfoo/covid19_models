@@ -62,12 +62,12 @@ def create_objective_fn(data, population, sampling_rate):
         t, s, i, r = compute_sir(
             sampling_rate,
             len(data),
-            population * pop_frac,
+            population * pop_frac - infected,
             infected,
             infection_rate,
             days_to_recover
         )
-        mse = np.mean(np.square(data - r[::sampling_rate]))
+        mse = np.mean(np.square(data - i[::sampling_rate] - r[::sampling_rate]))
         return mse
 
     return _fn
