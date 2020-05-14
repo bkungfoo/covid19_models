@@ -38,8 +38,8 @@
   {
     "Country": "US",
     "Title": "Houston",
-    "StateFIPS": 48,[15, 39, 71, 157, 167, 201, 291, 339, 473]
-    "CountyFIPS":
+    "StateFIPS": 48,
+    "CountyFIPS": [15, 39, 71, 157, 167, 201, 291, 339, 473]
   },
   {
     "Country": "US",
