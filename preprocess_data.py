@@ -17,7 +17,11 @@ flags.DEFINE_string('start_date', '', 'Start date for importing data. Format is 
                     'will default to creating the entire table if the table does not already exist, and doing '
                     'incremental updates if the table already exists.')
 
+flags.DEFINE_string('end_date', '', 'End date for importing data. Format is YYYY-MM-dd. If not specified, '
+                    'will default to the very last date available in imported data.')
+
 DEFAULT_START_DATE = datetime(2019, 1, 1)  # Set some long time in the past before infection.
+DEFAULT_END_DATE = datetime(2100, 1, 1)  # Set some long time in the future after infection.
 
 
 def is_date(string, fuzzy=False):
@@ -51,7 +55,7 @@ def get_county(string):
         return str_array[0]
 
 
-def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filename, start_date=''):
+def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filename, start_date='', end_date=''):
     column_names = ['FIPS', 'County', 'Province_State', 'Country_Region', 'Date', 'Cases', 'Deaths', 'Population']
 
     if os.path.exists(filename):
@@ -67,12 +71,21 @@ def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filena
             start_date = DEFAULT_START_DATE
     else:
         start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        
+    if not end_date:
+        end_date = DEFAULT_END_DATE
+    else:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+     
 
     # Use date conversions to extract correct dates from column names in COVID dataset
     date_cols = [x for x in list(us_confirmed_df) if is_date(x)]
     dates = [datetime.strptime(x, '%m/%d/%y') for x in date_cols]
-    dates = [x for x in dates if x >= start_date]
-    date_cols = [x for x in date_cols if datetime.strptime(x, '%m/%d/%y') >= start_date]
+    dates = [x for x in dates if x >= start_date and x <= end_date]
+    date_cols = [x for x in date_cols
+                 if datetime.strptime(x, '%m/%d/%y') >= start_date
+                 and datetime.strptime(x, '%m/%d/%y') <= end_date
+                ]
 
     # Append rows that have confirmed cases, deaths, and populations included.
     for index, row in us_confirmed_df.iterrows():
@@ -107,7 +120,8 @@ def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filena
         pickle.dump(us_combined_df, f)
 
 
-def write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, filename, start_date=''):
+def write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, filename,
+                             start_date='', end_date=''):
     column_names = ['Country_Region', 'Date', 'Cases', 'Deaths', 'Population']
 
     if os.path.exists(filename):
@@ -124,11 +138,19 @@ def write_world_country_data(world_confirmed_df, world_deaths_df, world_populati
     else:
         start_date = datetime.strptime(start_date, '%Y-%m-%d')
 
+    if not end_date:
+        end_date = DEFAULT_END_DATE
+    else:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+
     # Use date conversions to extract correct dates from column names in COVID dataset
     date_cols = [x for x in list(world_confirmed_df) if is_date(x)]
     dates = [datetime.strptime(x, '%m/%d/%y') for x in date_cols]
-    dates = [x for x in dates if x >= start_date]
-    date_cols = [x for x in date_cols if datetime.strptime(x, '%m/%d/%y') >= start_date]
+    dates = [x for x in dates if x >= start_date and x <= end_date]
+    date_cols = [x for x in date_cols
+                 if datetime.strptime(x, '%m/%d/%y') >= start_date
+                 and datetime.strptime(x, '%m/%d/%y') <= end_date
+                ]
 
     # Aggregate regions for countries
     world_confirmed_agg_df = world_confirmed_df.groupby(['Country/Region']).agg({
@@ -193,9 +215,9 @@ def preprocess_data(argv):
 
     # Write to disk
     write_us_county_data(us_confirmed_df, us_deaths_df, us_county_census_df, './data/us_combined_df.pkl',
-                         FLAGS.start_date)
+                         FLAGS.start_date, FLAGS.end_date)
     write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, './data/world_combined_df.pkl',
-                             FLAGS.start_date)
+                             FLAGS.start_date, FLAGS.end_date)
 
 
 if __name__ == "__main__":

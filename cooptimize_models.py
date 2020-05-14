@@ -21,10 +21,10 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('specfile', 'late_stage_areas', 'JSON file of countries and regions to load.')
 flags.DEFINE_string('metric', 'Deaths', 'Either \"Deaths\" or \"Cases\" (confirmed cases).')
 flags.DEFINE_boolean('smooth_data', True, 'Whether the smooth the data by limiting outlier fractional metric changes.')
-flags.DEFINE_string('start_date', '2019-01-01', 'First date from which to get data, specified in YYYY-MM-dd format.')
+flags.DEFINE_string('start_date', '2020-01-01', 'First date from which to get data, specified in YYYY-MM-dd format.')
 flags.DEFINE_string('end_date', '2021-01-01', 'Last date from which to get data, specified in YYYY-MM-dd format.')
-flags.DEFINE_multi_float('pop_frac_range', [0.00005, 0.01], 'Two floats specifying the min and max fraction of the '
-                         'population that will die or be a confirmed case (depending on \"metric\" param chosen) '
+flags.DEFINE_multi_float('pop_frac_range', [0.0007, 0.0015], 'Two floats specifying the min and max fraction of the '
+                         'population that would die if infected (depending on \"metric\" param chosen) '
                          'in steady state.')
 flags.DEFINE_multi_float('infection_rate_range', [0.01, 1.0], 'Two floats specifying the min and max number of people '
                          'a single infected person infects daily (on average), i.e. the base of the exponential.')

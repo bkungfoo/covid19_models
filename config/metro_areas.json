@@ -28,5 +28,23 @@
     "Title": "Los Angeles",
     "StateFIPS": 6,
     "CountyFIPS": [37, 59, 65, 71, 111]
+  },
+  {
+    "Country": "US",
+    "Title": "Atlanta",
+    "StateFIPS": 13,
+    "CountyFIPS": [35, 57, 63, 67, 89, 97, 113, 117, 121, 135, 151, 217, 247, 297]
+  },
+  {
+    "Country": "US",
+    "Title": "Houston",
+    "StateFIPS": 48,[15, 39, 71, 157, 167, 201, 291, 339, 473]
+    "CountyFIPS":
+  },
+  {
+    "Country": "US",
+    "Title": "Chicago",
+    "StateFIPS": 17,
+    "CountyFIPS": [31, 37, 43, 63, 89, 91, 93, 111, 197]
   }
 ]

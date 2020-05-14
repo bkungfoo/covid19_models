@@ -15,5 +15,5 @@ if [ -z "$1" ]
 then
   python preprocess_data.py
 else
-  python preprocess_data.py --start_date $1
+  python preprocess_data.py --start_date $1 --end_date $2
 fi

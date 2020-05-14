@@ -10,26 +10,29 @@ import pandas as pd
 from absl import app
 from absl import flags
 
-from modeling import dataproc, optimizer
+from modeling import dataproc, optimizer, sir_model
 
 FLAGS = flags.FLAGS
-flags.DEFINE_float('recovery_days', 19.8, 'Average number of days for an infected person remains contagious')
+flags.DEFINE_float('recovery_days', 10.0, 'Average number of days for an infected person remains contagious')
 flags.DEFINE_string('batch_first_end_date', '2020-03-14', 'First model end date for batch processing')
 flags.DEFINE_string('batch_last_end_date', '2020-05-01', 'Last model end date for batch processing')
-flags.DEFINE_integer('min_pos_value_days', 21, 'Only build a model for the region for a given ending date if there are '
-                                               'at least this many days with positive metric values available')
+flags.DEFINE_integer('window_length', 14, 'Only use this many days to build a model for the region for a given ending '
+                                          'date. Don\'t generate anything if any of these dates have zero values.')
 flags.DEFINE_string('specfile', 'country_geos', 'JSON file of countries and regions to load.')
 flags.DEFINE_string('metric', 'Deaths', 'Either \"Deaths\" or \"Cases\" (confirmed cases).')
 flags.DEFINE_boolean('smooth_data', True, 'Whether the smooth the data by limiting outlier fractional metric changes.')
-flags.DEFINE_multi_float('pop_frac_range', [0.00005, 0.01], 'Two floats specifying the min and max fraction of the '
-                         'population that will die or be a confirmed case (depending on \"metric\" param chosen) '
-                         'in steady state.')
+flags.DEFINE_float('pop_frac', 0.01, 'Two floats specifying the min and max fraction of the '
+                   'infected population will die or be a confirmed case (depending on \"metric\" param chosen) '
+                   'in steady state.')
 flags.DEFINE_multi_float('infection_rate_range', [0.01, 1.0], 'Two floats specifying the min and max number of people '
                          'a single infected person infects daily (on average), i.e. the base of the exponential.')
 flags.DEFINE_multi_float('multiplier_range', [0.001, 1000.0],
                          'Two floats specifying the min and max multiplier on the first day\'s recorded metric, '
                          'meaning that the \"true\" metric was actually ahead or behind the first recorded value. '
                          '(Allows us to slide the curve forward or backward in time.)')
+flags.DEFINE_multi_float('frac_infected_range', [0.01, 1.0],
+                         'Two floats specifying the min and max fraction of cases/deaths that should be considered '
+                         '"infected" rather than "recovered"')
 flags.DEFINE_integer('processes', 4, 'Number of processes to spawn for parallel optimization.')
 
 
@@ -45,11 +48,16 @@ def main(argv):
     if not os.path.isfile(csv_file):
         column_names = ['Date',
                         'Area',
-                        'Pop ' + FLAGS.metric + ' Rate',
-                        'Total ' + FLAGS.metric,
+                        FLAGS.metric + ' to Infections Ratio',
+                        'Max ' + FLAGS.metric,
+                        'Current Herd Immunity',
+                        'Final Herd Immunity',
                         'Infection Rate',
                         'Days To Recover',
                         FLAGS.metric + ' Multiplier',
+                        'Frac Infected',
+                        'R0',
+                        'R',
                         'MSE']
         df = pd.DataFrame(columns=column_names)
     else:
@@ -73,18 +81,20 @@ def main(argv):
         last_end_date = datetime.datetime.strptime(FLAGS.batch_last_end_date, '%Y-%m-%d')
         last_end_date = min(last_end_date, datetime.datetime.now() + datetime.timedelta(1))
         print('num days', int((last_end_date - first_end_date).days))
-
         # Multiprocessing
         num_days = int((last_end_date - first_end_date).days)
         rows = p.starmap(_parallel_fit_models,
                          zip([area] * num_days,
                              [first_end_date] * num_days,
                              range(num_days),
-                             [area_df] * num_days, [population] * num_days,
+                             [area_df] * num_days,
+                             [population] * num_days,
                              [FLAGS.recovery_days] * num_days,
-                             [FLAGS.pop_frac_range] * num_days,
+                             [FLAGS.pop_frac] * num_days,
                              [FLAGS.infection_rate_range] * num_days,
-                             [FLAGS.multiplier_range] * num_days))
+                             [FLAGS.multiplier_range] * num_days,
+                             [FLAGS.frac_infected_range] * num_days,
+                             ))
         for row in rows:
             if row is not None:
                 df.loc[len(df)] = row
@@ -94,12 +104,13 @@ def main(argv):
 
 
 def _parallel_fit_models(area, first_end_date, n, area_df, population, recovery_days,
-                         pop_frac_range, infection_rate_range, multiplier_range):
+                         pop_frac, infection_rate_range, multiplier_range, frac_infected_range):
     curr_end_date = first_end_date + datetime.timedelta(n)
-    bounded_area_df = area_df[area_df['Date'] <= curr_end_date]
+    curr_start_date = curr_end_date - datetime.timedelta(FLAGS.window_length)
+    bounded_area_df = area_df[(area_df['Date'] > curr_start_date) & (area_df['Date'] <= curr_end_date)]
     # Limit to only positive values
     bounded_area_df = bounded_area_df[bounded_area_df[FLAGS.metric] > 0]
-    if len(bounded_area_df) < FLAGS.min_pos_value_days:
+    if len(bounded_area_df) < FLAGS.window_length:
         return
 
     max_date = bounded_area_df['Date'].max()
@@ -110,15 +121,37 @@ def _parallel_fit_models(area, first_end_date, n, area_df, population, recovery_
     data = dataproc.convert_data_to_numpy(bounded_area_df, metric=FLAGS.metric)
     best_param, best_value = optimizer.minimize(
         data, population, recovery_days,
-        pop_frac_range, infection_rate_range, multiplier_range
+        pop_frac, infection_rate_range, multiplier_range, frac_infected_range
     )
     print('Area:', area['Title'], 'Ending date:', curr_end_date)
     print('Params:', best_param)
     print('MSE:', best_value)
+
+    # Write into df
+    best_infection_rate = best_param[0]
+    best_multiplier = best_param[1]
+    best_frac_infected = best_param[2]
+
+    infected = data[0] * best_multiplier * best_frac_infected
+    recovered = data[0] * best_multiplier * (1 - best_frac_infected)
+    t, s, i, r = sir_model.compute_sir(
+        10,
+        360, # A large value to simulate to steady state
+        population * pop_frac,
+        infected,
+        recovered,
+        best_infection_rate,
+        recovery_days
+    )
     return [max_date, area['Title'],
-            best_param[0], best_param[0] * population,
-            best_param[1], FLAGS.recovery_days,
-            best_param[2], best_value]
+            FLAGS.pop_frac, FLAGS.pop_frac * population,
+            data[-1] / FLAGS.pop_frac / population,
+            (population * FLAGS.pop_frac - s[-1]) / FLAGS.pop_frac / population,
+            best_infection_rate, FLAGS.recovery_days,
+            best_multiplier, best_frac_infected,
+            best_infection_rate * recovery_days,
+            best_infection_rate * recovery_days * (1 - data[-1] / FLAGS.pop_frac / population),
+            best_value]
 
 
 if __name__ == "__main__":

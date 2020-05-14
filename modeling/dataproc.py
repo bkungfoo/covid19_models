@@ -102,6 +102,6 @@ def convert_data_to_numpy(area_df, metric, smooth=True, window_start=-3, window_
 
         smoothed_deaths = np.array(smoothed_deaths)
         # TODO: Not sure if this final normalization is helpful.
-        return smoothed_deaths * area_df[metric].sum() / np.sum(smoothed_deaths)
+        return smoothed_deaths * area_df[metric].sum() / (np.sum(smoothed_deaths) + 1e-4)
     else:
         return data

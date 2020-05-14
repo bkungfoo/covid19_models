@@ -1,17 +1,18 @@
 import numpy as np
 
 
-NUM_METRICS = 3
+NUM_REGIONAL_METRICS = 2
 
 
-def compute_sir(sampling_rate, total_days, pop, infected, infection_rate, days_to_recover):
+def compute_sir(sampling_rate, total_days, total_pop, infected, recovered, infection_rate, days_to_recover):
     """Simulates the SIR output over a number of days using small fraction-of-day time steps.
 
     Args:
         sampling_rate: The number of samples per day.
         total_days: The total time to simulate.
-        pop: The population of the area we are simulating.
-        infected: The starting number of infected individuals.
+        total_pop: The total population.
+        infected: The starting infected population.
+        recovered: The starting recovered population
         infection_rate: The number of people each infected individual infects per day
           at the start of simulation (nearly everyone is susceptible).
         days_to_recover: The number of days it takes someone to recover from the disease.
@@ -22,9 +23,9 @@ def compute_sir(sampling_rate, total_days, pop, infected, infection_rate, days_t
     """
 
     # TODO: Use scipy.integrate.solve_ivp and 4th order Runge Kutta for improved accuracy.
-    s = [1.0]
-    i = [float(infected) / pop]
-    r = [0.0]
+    i = [float(infected) / total_pop]
+    r = [float(recovered) / total_pop]
+    s = [1 - i[0] - r[0]]
     beta = infection_rate
     gamma = 1.0 / days_to_recover
     dt = 1.0 / sampling_rate
@@ -40,7 +41,7 @@ def compute_sir(sampling_rate, total_days, pop, infected, infection_rate, days_t
     s = np.array(s)
     i = np.array(i)
     r = np.array(r)
-    return np.arange(0, total_days, dt), pop * s, pop * i, pop * r
+    return np.arange(0, total_days, dt), total_pop * s, total_pop * i, total_pop * r
 
 
 def create_objective_fn(data, population, sampling_rate):
@@ -56,14 +57,16 @@ def create_objective_fn(data, population, sampling_rate):
       and returns mse(model, data) as a function to maximize.
     """
 
-    def _fn(pop_frac, infection_rate, days_to_recover, starting_metric_multiplier):
+    def _fn(pop_frac, infection_rate, days_to_recover, starting_metric_multiplier, frac_infected):
         # starting_metric_m
-        infected = data[0] * starting_metric_multiplier
+        infected = data[0] * starting_metric_multiplier * frac_infected
+        recovered = data[0] * starting_metric_multiplier * (1 - frac_infected)
         t, s, i, r = compute_sir(
             sampling_rate,
             len(data),
-            population * pop_frac - infected,
+            population * pop_frac,
             infected,
+            recovered,
             infection_rate,
             days_to_recover
         )
@@ -74,7 +77,7 @@ def create_objective_fn(data, population, sampling_rate):
 
 
 def create_shared_objective_fn(data_list, population_list, sampling_rate):
-    """Create an objective function using MSE to fit an SIR model to multiple regions using shared mean recovery time.
+    """Create an objective function using MSE to fit an SIR model to multiple regions using shared parameters.
 
     Args:
       data_list: A list of N numpy arrays with raw daily data to model for each of the N regions.
@@ -83,34 +86,36 @@ def create_shared_objective_fn(data_list, population_list, sampling_rate):
 
     Returns:
       A function that takes in a numpy array of length (NUM_METRICS * N + 1), where N is the number of regions to
-        co-optimize for the mean recovery time. Currently, NUM_METRICS = 3, and the numpy indices in the input numpy
-        array represent the following proposed values to evaluate mse:
-        [pop_frac_region1, infection_rate_region1, days_to_recover_region1,
-         pop_frac_region2, infection_rate_region2, days_to_recover_region2,
+        co-optimize for the mean recovery time and starting population susceptible to death. Currently, NUM_METRICS = 2,
+        and the numpy indices in the input numpy array represent the following proposed values to evaluate mse:
+        [infection_rate_region1, days_to_recover_region1,
+         infection_rate_region2, days_to_recover_region2,
          ...,
-         pop_frac_regionN, infection_rate_regionN, days_to_recover_regionN,
+         infection_rate_regionN, days_to_recover_regionN,
 
          The function returns the mse(model, data) across all regions as a function to maximize.
     """
 
     def _fn(params):
-        recovery_time = params[-1]
+        recovery_time = params[-2]
+        pop_frac = params[-1]
 
         sumse = 0
         count = 0
-        for i in range(int(params.shape[0]/3)):
+        for i in range(int(params.shape[0]/2 - 1)):
             data = data_list[i]
             population = population_list[i]
-            pop_frac = params[NUM_METRICS*i]
-            infection_rate = params[NUM_METRICS*i+1]
-            starting_metric_multiplier = params[3*i+2]
+            infection_rate = params[NUM_REGIONAL_METRICS*i]
+            starting_metric_multiplier = params[NUM_REGIONAL_METRICS*i+1]
 
             infected = data[0] * starting_metric_multiplier
+            recovered = max(0, data[0] * (1 - starting_metric_multiplier))
             t, s, i, r = compute_sir(
                 sampling_rate,
                 len(data),
                 population * pop_frac,
                 infected,
+                recovered,
                 infection_rate,
                 recovery_time
             )
