@@ -24,13 +24,13 @@ flags.DEFINE_boolean('smooth_data', True, 'Whether the smooth the data by limiti
 flags.DEFINE_float('pop_frac', 0.01, 'Two floats specifying the min and max fraction of the '
                    'infected population will die or be a confirmed case (depending on \"metric\" param chosen) '
                    'in steady state.')
-flags.DEFINE_multi_float('infection_rate_range', [0.01, 1.0], 'Two floats specifying the min and max number of people '
+flags.DEFINE_multi_float('infection_rate_range', [0.001, 0.80], 'Two floats specifying the min and max number of people '
                          'a single infected person infects daily (on average), i.e. the base of the exponential.')
-flags.DEFINE_multi_float('multiplier_range', [0.001, 1000.0],
+flags.DEFINE_multi_float('multiplier_range', [0.01, 10.0],
                          'Two floats specifying the min and max multiplier on the first day\'s recorded metric, '
                          'meaning that the \"true\" metric was actually ahead or behind the first recorded value. '
                          '(Allows us to slide the curve forward or backward in time.)')
-flags.DEFINE_multi_float('frac_infected_range', [0.01, 1.0],
+flags.DEFINE_multi_float('frac_infected_range', [0.01, 0.99],
                          'Two floats specifying the min and max fraction of cases/deaths that should be considered '
                          '"infected" rather than "recovered"')
 flags.DEFINE_integer('processes', 4, 'Number of processes to spawn for parallel optimization.')
@@ -70,6 +70,7 @@ def main(argv):
             raise ValueError('Bad JSON entry, missing field \"Title\"')
         print('Loading area', area['Title'])
         if 'StateFIPS' not in area:
+            print('hi')
             area_df, population = datastore.get_time_series_for_area(area['Country'])
         elif 'CountyFIPS' not in area:
             area_df, population = datastore.get_time_series_for_area(area['Country'], state_fips=area['StateFIPS'])
@@ -95,6 +96,7 @@ def main(argv):
                              [FLAGS.multiplier_range] * num_days,
                              [FLAGS.frac_infected_range] * num_days,
                              ))
+        print(rows[0])
         for row in rows:
             if row is not None:
                 df.loc[len(df)] = row
@@ -118,7 +120,9 @@ def _parallel_fit_models(area, first_end_date, n, area_df, population, recovery_
         return
 
     # Preprocess and optimize model
+    bounded_area_df = dataproc.detrend_day_of_week(bounded_area_df, area_df, metric=FLAGS.metric)
     data = dataproc.convert_data_to_numpy(bounded_area_df, metric=FLAGS.metric)
+    data = dataproc.convert_data_to_numpy(bounded_area_df, metric=FLAGS.metric + ' adjusted cumsum')
     best_param, best_value = optimizer.minimize(
         data, population, recovery_days,
         pop_frac, infection_rate_range, multiplier_range, frac_infected_range

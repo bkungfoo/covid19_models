@@ -42,3 +42,7 @@ This file can then be used with any of the python notebooks (`.ipynb` extensions
 
 Please see fit_model file for other options. For example, you can set batch_first_end_date
 and batch_last_end_date to do incremental writes to the csv by date.
+
+## Notes
+
+Hawaii was removed because of low death and case counts.

@@ -1,4 +1,5 @@
 """A class that holds all imported raw data files and contains methods to pull out requested pandas dataframes."""
+from datetime import timedelta
 import numpy as np
 import pandas as pd
 import pickle
@@ -59,6 +60,62 @@ class DataStore:
         area_df = area_df.sort_values('Date').reset_index()
         print('Total population', population)
         return area_df, population
+
+
+def detrend_day_of_week(bounded_area_df, area_df, metric, weeks=4):
+    # Columns
+    diff_col = metric + ' diff'
+    diff_sq_col = metric + ' squared diff'
+    diff_adj_col = metric + ' diff adjusted'
+    adj_cumsum_col = metric + ' adjusted cumsum'
+
+    # Original DF with all dates.
+    area_df['dow'] = area_df['Date'].dt.dayofweek
+    area_df[diff_col] = area_df[metric] - area_df[metric].shift(1)
+    area_df[diff_sq_col] = area_df[diff_col] * area_df[diff_col]
+    dow_sum = None
+    weeks = 4
+
+    weekly_sum = 0
+    weekly_sum_squared = 0
+    for days_before in range(weeks * 7 - 1, weeks * 7 + 6):  # 7 days shift
+        for week in range(weeks):
+            start_date = area_df['Date'].max() + timedelta(-days_before + week * 7)
+            norm_dow = area_df[
+                (area_df['Date'] >= start_date) &
+                (area_df['Date'] <= start_date + timedelta(6))
+                ][['Date', metric, diff_col, diff_sq_col, 'dow']].groupby('dow').sum()
+
+            dow_mean = norm_dow[diff_col].mean()
+            norm_dow[diff_col] /= dow_mean
+            norm_dow[diff_sq_col] /= (dow_mean ** 2)
+            weekly_sum += norm_dow[diff_col].sum()
+            weekly_sum_squared += norm_dow[diff_sq_col].sum()
+            if dow_sum is None:  # 1 week of data
+                dow_sum = norm_dow
+            else:
+                dow_sum += norm_dow
+    # Total number of samples is weeks * 7, so we take the mean by dividing by weeks * 7
+    death_mean = dow_sum[diff_col] / weeks / 7
+    death_err = np.sqrt(dow_sum[diff_sq_col] / weeks / 7 - death_mean * death_mean) / np.sqrt(weeks)
+    weekly_mean = weekly_sum / weeks / 7 / 7
+    weekly_err = np.sqrt(weekly_sum_squared / weeks / 7 / 7 - weekly_mean * weekly_mean) / np.sqrt(weeks)
+    # Apply Gaussian weighted averaging (Kalman Filter)
+    kf_mean = (death_mean * (1 / death_err ** 2) + weekly_mean * (1 / weekly_err ** 2)
+               ) / ((1 / death_err ** 2) + (1 / weekly_err ** 2))
+    if np.isnan(kf_mean).any() or (kf_mean == 0).any():
+        print('skipping dow detrending')
+        bounded_area_df[adj_cumsum_col] = bounded_area_df[metric]  # Don't do any day of week smoothing
+        return bounded_area_df
+    # DF to modify.
+    bounded_area_df['dow'] = bounded_area_df['Date'].dt.dayofweek
+    bounded_area_df[diff_col] = bounded_area_df[metric] - bounded_area_df[metric].shift(1)
+    bounded_area_df[diff_adj_col] = bounded_area_df[diff_col] / bounded_area_df['dow'].apply(lambda x: kf_mean[x])
+    bounded_area_df[diff_adj_col].iloc[0] = 0
+    bounded_area_df[adj_cumsum_col] = bounded_area_df[diff_adj_col].cumsum()
+    bounded_area_df[adj_cumsum_col] = bounded_area_df[adj_cumsum_col] + bounded_area_df[metric].iloc[0]
+
+    return bounded_area_df
 
 
 def convert_data_to_numpy(area_df, metric, smooth=True, window_start=-3, window_end=3):

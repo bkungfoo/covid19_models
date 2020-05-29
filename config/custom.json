@@ -1,0 +1,14 @@
+[
+  {
+    "Country": "US",
+    "Title": "Miami",
+    "StateFIPS": 12,
+    "CountyFIPS": [11, 86, 99]
+  },
+  {
+    "Country": "US",
+    "Title": "Tampa-St. Petersburg",
+    "StateFIPS": 12,
+    "CountyFIPS": [53, 57, 101, 103]
+  }
+]

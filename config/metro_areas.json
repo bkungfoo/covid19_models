@@ -43,8 +43,26 @@
   },
   {
     "Country": "US",
+    "Title": "Austin",
+    "StateFIPS": 48,
+    "CountyFIPS": [209, 453, 491]
+  },
+  {
+    "Country": "US",
     "Title": "Chicago",
     "StateFIPS": 17,
     "CountyFIPS": [31, 37, 43, 63, 89, 91, 93, 111, 197]
+  },
+  {
+    "Country": "US",
+    "Title": "Miami",
+    "StateFIPS": 12,
+    "CountyFIPS": [11, 86, 99]
+  },
+  {
+    "Country": "US",
+    "Title": "Tampa-St. Petersburg",
+    "StateFIPS": 12,
+    "CountyFIPS": [53, 57, 101, 103]
   }
 ]
