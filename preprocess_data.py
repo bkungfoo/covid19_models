@@ -39,85 +39,42 @@ def is_date(string, fuzzy=False):
     except ValueError:
         return False
 
-    
-def get_county(string):
-    """Parse out a US county from a combined string containing county, state, and country.
 
-    Args:
-      string: The full string in format "county, state, country".
-    Returns:
-      The county name if it exists, otherwise empty string.
-    """
-    str_array = string.split(',')
-    if len(str_array) < 3:
-        return ''
-    else:
-        return str_array[0]
+def _filter_us_cols(df, metric):
+    df = df[(df['FIPS'] >= 0) & (~df['FIPS'].isna())]
+    del df['Admin2']
+    del df['iso2']
+    del df['UID']
+    del df['iso3']
+    del df['code3']
+    del df['Province_State']
+    del df['Country_Region']
+    try:
+        del df['Population']
+    except:
+        print('Population does not exist')
+    try:
+        del df['Combined_Key']
+    except:
+        print('Combined key does not exist')
+    df = df.melt(id_vars=['FIPS', 'Lat', 'Long_'],
+                 var_name='Date', value_name=metric)
+    return df
 
 
-def write_us_county_data(us_confirmed_df, us_deaths_df, county_census_df, filename, start_date='', end_date=''):
-    column_names = ['FIPS', 'County', 'Province_State', 'Country_Region', 'Date', 'Cases', 'Deaths', 'Population']
-
-    if os.path.exists(filename):
-        with open(filename, 'rb') as f:
-            us_combined_df = pickle.load(f)
-    else:
-        us_combined_df = pd.DataFrame(columns=column_names)
-
-    if not start_date:
-        if len(us_combined_df):
-            start_date = us_combined_df['Date'].max() + timedelta(0, 0, 1)
-        else:
-            start_date = DEFAULT_START_DATE
-    else:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
-        
-    if not end_date:
-        end_date = DEFAULT_END_DATE
-    else:
-        end_date = datetime.strptime(end_date, '%Y-%m-%d')
-     
-
-    # Use date conversions to extract correct dates from column names in COVID dataset
-    date_cols = [x for x in list(us_confirmed_df) if is_date(x)]
-    dates = [datetime.strptime(x, '%m/%d/%y') for x in date_cols]
-    dates = [x for x in dates if x >= start_date and x <= end_date]
-    date_cols = [x for x in date_cols
-                 if datetime.strptime(x, '%m/%d/%y') >= start_date
-                 and datetime.strptime(x, '%m/%d/%y') <= end_date
-                ]
-
-    # Append rows that have confirmed cases, deaths, and populations included.
-    for index, row in us_confirmed_df.iterrows():
-        fips = row['FIPS']
-        county = get_county(row['Combined_Key'])
-        if math.isnan(fips):
-            print('skipping county', county, fips, population)
-            continue
-        population = county_census_df[
-            (county_census_df.STATE == int(fips / 1000))
-            & (county_census_df.COUNTY == int(fips % 1000))]['POPESTIMATE2019']
-        if len(population) != 1:
-            print('skipping county', county, fips, population)
-            continue
-        population = population.to_numpy()[0]
-        for (date_col, date) in zip(date_cols, dates):
-            confirmed = row[date_col]
-            if confirmed == 0:
-                continue
-            if date_col in us_deaths_df:
-                deaths = us_deaths_df[us_deaths_df.FIPS == row['FIPS']][date_col].to_numpy()[0]
-            else:
-                deaths = 0
-
-            values = [fips, county, row['Province_State'], row['Country_Region'], date, confirmed, deaths, population]
-            df_length = len(us_combined_df)
-            us_combined_df.loc[df_length] = values
-        if index % 100 == 0:
-            print('processed {} out of {}'.format(index, len(us_confirmed_df)))
-    us_combined_df = us_combined_df.drop_duplicates(['Date', 'FIPS'], keep='last')  # Drop duplicates just in case
+def write_us_county_data(us_confirmed_df, us_deaths_df, us_county_census_df, filename):
+    us_confirmed_df = _filter_us_cols(us_confirmed_df, 'Cases')
+    us_deaths_df = _filter_us_cols(us_deaths_df, 'Deaths')
+    us_deaths_df = us_deaths_df[['FIPS', 'Date', 'Deaths']]
+    us_deaths_df = us_deaths_df.set_index(['FIPS', 'Date'])
+    us_county_census_df['FIPS'] = us_county_census_df.STATE * 1000 + us_county_census_df.COUNTY
+    us_county_census_df = us_county_census_df.set_index('FIPS')
+    us_confirmed_df = us_confirmed_df.join(us_county_census_df[['CTYNAME', 'STNAME', 'POPESTIMATE2019']], on='FIPS',
+                                           how='inner')
+    us_confirmed_df = us_confirmed_df.join(us_deaths_df, on=['FIPS', 'Date'], how='inner')
+    us_confirmed_df['Date'] = us_confirmed_df['Date'].map(lambda x: datetime.strptime(x, '%m/%d/%y'))
     with open(filename, 'wb') as f:
-        pickle.dump(us_combined_df, f)
+        pickle.dump(us_confirmed_df, f)
 
 
 def write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, filename,
@@ -214,8 +171,7 @@ def preprocess_data(argv):
     world_population_df['Population'] *= 1000
 
     # Write to disk
-    write_us_county_data(us_confirmed_df, us_deaths_df, us_county_census_df, './data/us_combined_df.pkl',
-                         FLAGS.start_date, FLAGS.end_date)
+    write_us_county_data(us_confirmed_df, us_deaths_df, us_county_census_df, './data/us_combined_df.pkl')
     write_world_country_data(world_confirmed_df, world_deaths_df, world_population_df, './data/world_combined_df.pkl',
                              FLAGS.start_date, FLAGS.end_date)
 
