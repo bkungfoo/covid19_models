@@ -1,7 +1,11 @@
+absl-py
 sklearn
 pandas
 numpy
-scipy
 matplotlib
 seaborn
 jupyter
+statsmodels
+tensorflow
+tensorflow-probability
+cloudpickle==1.4.1
