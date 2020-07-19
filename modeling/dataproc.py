@@ -3,6 +3,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 import pickle
+import os
 
 
 class DataStore:
@@ -11,6 +12,7 @@ class DataStore:
                  world_df_path='./data/world_combined_df.pkl',
                  us_county_census='./data/co-est2019-alldata.csv'):
 
+        print(os.listdir('./'))
         with open('./data/us_combined_df.pkl', 'rb') as f:
             self.us_combined_df = pickle.load(f)
 
@@ -20,46 +22,55 @@ class DataStore:
 
             self.county_census_df = pd.read_csv('./data/co-est2019-alldata.csv', encoding='latin-1')
 
-    def get_time_series_for_area(self, country, state_fips=None, county_fips=[]):
+    def get_time_series_for_area(self, country, states_and_counties):
         """Slice the dataframe by the are of interest and aggregate confirmed cases and deaths by date.
 
         NOTE: this function only works if you have already prefetched all of the data in the above cell!
 
         Args:
-          area_of_interest_spec: A tuple (country, area_name, state_fips, county_fips).
+            country: A string representing the country
+            states_and_counties: If the US, a list of FIPS [(state1, list_of_counties1), (state2, list_of_counties2)].
 
         Returns:
           A Dataframe holding a time series of confirmed cases and deaths for the area of interest.
         """
-        if country == 'US' and state_fips is not None:
-            if not county_fips:
-                population = self.county_census_df[(self.county_census_df.STATE == state_fips)
-                                                   & (self.county_census_df.COUNTY == 0)]['POPESTIMATE2019'].sum()
-                area_df = self.us_combined_df[
-                    (self.us_combined_df.FIPS > state_fips * 1000)
-                    & (self.us_combined_df.FIPS < (state_fips + 1) * 1000)].groupby('Date').agg(
-                    {'Cases': 'sum',
-                     'Deaths': 'sum',
-                     })
-            else:
-                combined_fips = [state_fips * 1000 + y for y in county_fips]
-                population = self.county_census_df[
-                    (self.county_census_df.STATE == state_fips)
-                    & (self.county_census_df.COUNTY.isin(county_fips))]['POPESTIMATE2019'].sum()
-                area_df = self.us_combined_df[
-                    (self.us_combined_df.FIPS.isin(combined_fips))].groupby('Date').agg({
-                    'Cases': 'sum',
-                    'Deaths': 'sum',
-                })
+        if country == 'US' and states_and_counties is not None:
+            agg_df = pd.DataFrame(columns=['Cases', 'Deaths'])
+            population = 0
+            for state, counties in states_and_counties:
+                if not counties:
+                    population += self.county_census_df[(self.county_census_df.STATE == state)
+                                                        & (self.county_census_df.COUNTY == 0)]['POPESTIMATE2019'].sum()
+                    area_df = self.us_combined_df[
+                        (self.us_combined_df.FIPS > state * 1000)
+                        & (self.us_combined_df.FIPS < (state + 1) * 1000)].groupby('Date').agg(
+                        {'Cases': 'sum',
+                         'Deaths': 'sum',
+                         })
+                else:
+                    combined_fips = [state * 1000 + y for y in counties]
+                    population += self.county_census_df[
+                        (self.county_census_df.STATE == state)
+                        & (self.county_census_df.COUNTY.isin(counties))]['POPESTIMATE2019'].sum()
+                    area_df = self.us_combined_df[
+                        (self.us_combined_df.FIPS.isin(combined_fips))].groupby('Date').agg({
+                        'Cases': 'sum',
+                        'Deaths': 'sum',
+                    })
+                agg_df = agg_df.join(area_df, how='outer', rsuffix='_other')
+                agg_df = agg_df.fillna(0)
+                agg_df['Cases'] = agg_df['Cases'] + agg_df['Cases_other']
+                agg_df['Deaths'] = agg_df['Deaths'] + agg_df['Deaths_other']
+                del agg_df['Cases_other']
+                del agg_df['Deaths_other']
         else:
-            area_df = self.world_combined_df[
+            agg_df = self.world_combined_df[
                 (self.world_combined_df.Country_Region == country)]
-            population = area_df['Population'].iloc[0]
-        area_df = area_df.reset_index()
-        area_df = area_df.drop_duplicates(['Date'], keep='last')
-        area_df = area_df.sort_values('Date').reset_index()
-        print('Total population', population)
-        return area_df, population
+            population = agg_df['Population'].iloc[0]
+        agg_df = agg_df.reset_index()
+        agg_df = agg_df.drop_duplicates(['Date'], keep='last')
+        agg_df = agg_df.sort_values('Date').reset_index()
+        return agg_df, population
 
 
 def detrend_day_of_week(bounded_area_df, area_df, metric, weeks=4):
