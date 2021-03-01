@@ -16,7 +16,7 @@ config file to use for co-optimization is `late_stage_areas` as it contains coun
 in later stages of the curve. 
 
 ```
-python cooptimize_models.py --specfile late_stage_areas --processes 4
+python modeling/cooptimize_models.py --specfile late_stage_areas --processes 4
 ```
 
 Because the code requires grid search followed by independent local optimization runs,
@@ -32,7 +32,7 @@ in the [config](./config) directory, and place it in the config directory. Then 
 the [fit_model.py](./fit_models.py) script, e.g.:
 
 ```
-python fit_model.py --specfile metro_areas --recovery_days 20 --processes 4
+python modeling/fit_model.py --specfile metro_areas --recovery_days 20 --processes 4
 ```
 
 This should generate a csv in your `data` folder with the title corresponding to your

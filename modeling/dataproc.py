@@ -6,6 +6,9 @@ import pickle
 import os
 
 
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 class DataStore:
 
     def __init__(self, us_df_path='./data/us_combined_df.pkl',
@@ -13,14 +16,30 @@ class DataStore:
                  us_county_census='./data/co-est2019-alldata.csv'):
 
         print(os.listdir('./'))
-        with open('./data/us_combined_df.pkl', 'rb') as f:
+        with open(os.path.join(MODULE_DIR, '../data/us_combined_df.pkl'), 'rb') as f:
             self.us_combined_df = pickle.load(f)
+            # Fix some data issues with the US data
+            self._fix_us_data()
 
         # Load covid and world population data
-        with open('./data/world_combined_df.pkl', 'rb') as f:
+        with open(os.path.join(MODULE_DIR, '../data/world_combined_df.pkl'), 'rb') as f:
             self.world_combined_df = pickle.load(f)
 
-            self.county_census_df = pd.read_csv('./data/co-est2019-alldata.csv', encoding='latin-1')
+            self.county_census_df = pd.read_csv(
+                os.path.join(MODULE_DIR, '../data/co-est2019-alldata.csv'), encoding='latin-1')
+
+    def _fix_us_data(self):
+        '''Fix reporting issues with US data.
+
+        Renormalize data prior to changes in reporting (e.g. inclusion of likely covid cases or deaths)
+        to prevent strange spikes in cases or deaths.
+
+        New Jersey (6/25)
+        https://www.nj.com/coronavirus/2020/06/nj-reports-probable-coronavirus-deaths-for-1st-time-death-toll-now-at-14872-with-170k-total-positive-tests.html
+
+        New York
+        '''
+        #fix_death_by_trend()
 
     def get_time_series_for_area(self, country, states_and_counties):
         """Slice the dataframe by the are of interest and aggregate confirmed cases and deaths by date.
